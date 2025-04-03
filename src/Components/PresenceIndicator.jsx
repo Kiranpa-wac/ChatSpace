@@ -8,7 +8,7 @@ const PresenceIndicator = ({ uid }) => {
       style={{
         width: "20px",
         height: "20px",
-        backgroundColor: online ? "green" : "gray",
+        backgroundColor: online ? "yellow"  : "gray",
         borderRadius: "50%",
         display: "inline-block",
       }}
