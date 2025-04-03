@@ -22,7 +22,7 @@ const useSignIn = () => {
       // Get reference to user document in Firestore
       const userDocRef = doc(db, "users", currentUser.uid);
       const docSnap = await getDoc(userDocRef);
-
+      setupPresence()
       // If the document does not exist, create it
       if (!docSnap.exists()) {
         await setDoc(userDocRef, {
@@ -42,7 +42,6 @@ const useSignIn = () => {
       });
 
       navigate("/home");
-      setupPresence()
     } catch (err) {
       console.error(err);
       setError(err);

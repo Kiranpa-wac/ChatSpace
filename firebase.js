@@ -12,7 +12,7 @@ import { getDatabase } from "firebase/database";
 const firebaseConfig = {
   apiKey: "AIzaSyDzhnLCmad-FClk038BMTel0veqq8jbWgg",
   authDomain: "mychatapp-d3daf.firebaseapp.com",
-  databaseURL: "https://mychatapp-d3daf-default-rtdb.asia-southeast1.firebasedatabase.app/",
+  databaseURL:"https://mychatapp-d3daf-default-rtdb.asia-southeast1.firebasedatabase.app/",
   projectId: "mychatapp-d3daf",
   storageBucket: "mychatapp-d3daf.firebasestorage.app",
   messagingSenderId: "645308376399",
