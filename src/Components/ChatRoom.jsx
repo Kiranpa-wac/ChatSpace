@@ -170,14 +170,12 @@ const ChatRoom = ({ chatId }) => {
         ))}
       </div>
 
-      {/* Emoji Picker */}
       {showEmojiPicker && (
         <div className="absolute bottom-20 right-4">
           <EmojiPicker onEmojiClick={onEmojiClick} />
         </div>
       )}
 
-      {/* Message Input */}
       <form
         onSubmit={sendMessage}
         className="bg-gray-100 p-4 border-t border-gray-200 flex items-center relative"

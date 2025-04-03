@@ -3,6 +3,7 @@ import { MessageCircle, UserPlus } from "lucide-react";
 import { useAtom } from "jotai";
 import { userAtom } from "../atom";
 import useChatConversations from "../hooks/useChatConversations";
+import PresenceIndicator from "./PresenceIndicator";
 import NewChatModal from "./NewChatModal";
 
 const ConversationList = ({ onSelectChat }) => {
@@ -18,6 +19,9 @@ const ConversationList = ({ onSelectChat }) => {
         </div>
       </div>
     );
+  }
+  const getOtherUserId = (chat, currentUserId) => {
+    return chat.participants.find((id) => id !== currentUserId)
   }
 
   return (
@@ -42,6 +46,9 @@ const ConversationList = ({ onSelectChat }) => {
                 <span className="text-blue-600 font-semibold">
                   {getParticipantName(chat)[0].toUpperCase()}
                 </span>
+                <div className="absolute bottom-0 right-0">
+                  <PresenceIndicator uid={getOtherUserId(chat, currentUser.uid)} />
+                </div>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-gray-800 font-medium truncate">
