@@ -42,7 +42,7 @@ const ConversationList = ({ onSelectChat }) => {
               onClick={() => onSelectChat(chat.id)}
               className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition duration-300 ease-in-out flex items-center"
             >
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+              <div className="relative w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
                 <span className="text-blue-600 font-semibold">
                   {getParticipantName(chat)[0].toUpperCase()}
                 </span>
