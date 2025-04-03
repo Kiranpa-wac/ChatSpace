@@ -1,13 +1,20 @@
-import React from 'react'
-import useUserPresence from '../hooks/useUserPresence'
+import React from "react";
+import useUserPresence from "../hooks/useUserPresence";
 
-const PresenceIndicator = ({uid}) => {
-    const online = useUserPresence(uid)
+const PresenceIndicator = ({ uid }) => {
+  const online = useUserPresence(uid);
   return (
-    <span className={`inline-block w-3 h-3 rounded-full ${online? "bg-green-500": "bg-gray-400"}`}
-    title={online? "Online": "Offline"}
+    <span
+      style={{
+        width: "20px",
+        height: "20px",
+        backgroundColor: online ? "green" : "gray",
+        borderRadius: "50%",
+        display: "inline-block",
+      }}
+      title={online ? "Online" : "Offline"}
     ></span>
-  )
-}
+  );
+};
 
-export default PresenceIndicator
+export default PresenceIndicator;

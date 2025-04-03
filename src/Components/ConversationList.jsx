@@ -54,9 +54,7 @@ const ConversationList = ({ onSelectChat }) => {
                 <p className="text-gray-800 font-medium truncate">
                   {getParticipantName(chat)}
                 </p>
-                <p className="text-sm text-gray-500 truncate">
-                  {chat.lastMessage?.text || "No messages yet"}
-                </p>
+                
               </div>
               {chat.lastMessage && (
                 <span className="ml-2 text-xs text-gray-400">
