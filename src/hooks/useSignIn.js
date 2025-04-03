@@ -5,6 +5,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useAtom } from "jotai";
 import { userAtom } from "../atom";
 import { useNavigate } from "react-router-dom";
+import { setupPresence } from "../setupPresence";
 
 const useSignIn = () => {
   const [error, setError] = useState(null);
@@ -41,6 +42,7 @@ const useSignIn = () => {
       });
 
       navigate("/home");
+      setupPresence()
     } catch (err) {
       console.error(err);
       setError(err);
