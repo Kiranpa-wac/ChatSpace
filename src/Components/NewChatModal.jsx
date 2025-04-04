@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { 
+import {
   collection,
   query,
   where,
@@ -9,20 +9,14 @@ import {
   doc,
   updateDoc,
   arrayUnion,
-  documentId
+  documentId,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useAtom } from "jotai";
 import { userAtom } from "../atom";
-import { 
-  Search, 
-  X, 
-  MessageSquarePlus, 
-  Loader2 
-} from "lucide-react";
+import { Search, X, MessageSquarePlus, Loader2 } from "lucide-react";
 
 const NewChatModal = ({ onChatCreated }) => {
-  // Internal modal state
   const [isOpen, setIsOpen] = useState(false);
 
   // Modal fields & state
@@ -96,10 +90,17 @@ const NewChatModal = ({ onChatCreated }) => {
           participants: [currentUser.uid, selectedUser.id],
           createdAt: serverTimestamp(),
           lastMessage: {
-            text: "", 
+            text: "",
             createdAt: serverTimestamp(),
             senderId: currentUser.uid,
           },
+          // Initialize unreadCount for each participant to 0
+          unreadCount: {
+            [currentUser.uid]: 0,
+            [selectedUser.id]: 0,
+          },
+          // Initialize readBy as an empty array (or add currentUser.uid if desired)
+          readBy: [],
         };
         const chatRef = await addDoc(chatsRef, chatData);
         chatId = chatRef.id;
@@ -164,7 +165,7 @@ const NewChatModal = ({ onChatCreated }) => {
             autoFocus
           />
           {search && (
-            <button 
+            <button
               onClick={() => setSearch("")}
               className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
             >
@@ -202,14 +203,15 @@ const NewChatModal = ({ onChatCreated }) => {
               >
                 <div className="flex-shrink-0 mr-3">
                   {user.photoURL ? (
-                    <img 
-                      src={user.photoURL} 
-                      alt={user.displayName} 
+                    <img
+                      src={user.photoURL}
+                      alt={user.displayName}
                       className="h-10 w-10 rounded-full object-cover"
                     />
                   ) : (
                     <div className="h-10 w-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-medium">
-                      {user.displayName && user.displayName.charAt(0).toUpperCase()}
+                      {user.displayName &&
+                        user.displayName.charAt(0).toUpperCase()}
                     </div>
                   )}
                 </div>

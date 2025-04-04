@@ -9,7 +9,6 @@ const useOtherUserData = (chatId) => {
   useEffect(() => {
     const fetchOtherUser = async () => {
       try {
-        // Get the chat document
         const chatRef = doc(db, "chats", chatId);
         const chatSnap = await getDoc(chatRef);
         if (chatSnap.exists()) {
@@ -17,7 +16,7 @@ const useOtherUserData = (chatId) => {
           // Determine the other participant (not the current user)
           const currentUserId = auth.currentUser.uid;
           const otherUserId = chatData.participants.find(
-            (id) => id !== currentUserId
+            (id) => id !== currentUserId 
           );
           if (otherUserId) {
             // Fetch the other user's document

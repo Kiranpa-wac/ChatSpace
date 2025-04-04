@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import { db, auth, storage } from "../../firebase"; // Import Firebase Storage
+import { db, auth } from "../../firebase";
+import useOtherUserData from "../hooks/useOtheruserData";
 import {
   collection,
   query,
@@ -10,23 +11,31 @@ import {
   doc,
   updateDoc,
 } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"; // Import Firebase Storage functions
-import { Send, Smile, Paperclip } from "lucide-react"; // Added Paperclip icon
-import EmojiPicker from "emoji-picker-react"; // Import emoji picker
+import { Send, Smile, PlusCircle, ArrowLeft } from "lucide-react";
+import EmojiPicker from "emoji-picker-react";
+import ChatMessage from "./ChatMessage";  // Using your ChatMessage component
+import { MessageCircle } from "lucide-react";
 
-const ChatRoom = ({ chatId }) => {
+const ChatRoom = ({ chatId, chats, setChats }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [file, setFile] = useState(null); // State for file attachment
-  const fileInputRef = useRef(null); // Define fileInputRef
+  const [sending, setSending] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  
+  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const receiver = useOtherUserData(chatId);
+  const inputRef = useRef(null);
 
-  const scrollToBottom = (node) => {
-    if (node) {
-      node.scrollIntoView({ behavior: "smooth" });
+  // Focus on input field when chat changes
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.focus();
     }
-  };
+  }, [chatId]);
 
+  // Listen for messages changes
   useEffect(() => {
     setMessages([]);
     const messageRef = collection(db, "chats", chatId, "messages");
@@ -38,12 +47,38 @@ const ChatRoom = ({ chatId }) => {
     return () => unsubscribe();
   }, [chatId]);
 
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Detect scroll position to show/hide scroll button
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      // Show button if not at bottom
+      setShowScrollButton(scrollHeight - scrollTop - clientHeight > 100);
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   const sendMessage = async (e) => {
     e.preventDefault();
-    if (input.trim() === "" && !file) return;
-    setInput("");
+    if (input.trim() === "" || sending) return;
+    
     setShowEmojiPicker(false);
-    setFile(null); // Reset file state after sending
+    setSending(true);
+    const trimmedInput = input.trim();
+    setInput("");
 
     const { uid, photoURL, displayName } = auth.currentUser;
 
@@ -53,166 +88,214 @@ const ChatRoom = ({ chatId }) => {
         senderId: uid,
         senderName: displayName,
         photoUrl: photoURL,
+        text: trimmedInput,
         createdAt: serverTimestamp(),
       };
 
-      if (input.trim()) {
-        messageData.text = input;
-      }
+      await addDoc(messageRef, messageData);
 
-      if (file) {
-        const storageRef = ref(storage, `files/${file.name}`);
-        const uploadTask = uploadBytesResumable(storageRef, file);
-
-        uploadTask.on(
-          "state_changed",
-          (snapshot) => {
-            // Handle upload progress if needed
-          },
-          (error) => {
-            console.error("Error uploading file:", error);
-          },
-          async () => {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            messageData.file = {
-              url: downloadURL,
-              name: file.name,
-              type: file.type,
-            };
-
-            const docRef = await addDoc(messageRef, messageData);
-
-            const chatRef = doc(db, "chats", chatId);
-            await updateDoc(chatRef, {
-              lastMessage: {
-                text: input || file.name,
-                createdAt: serverTimestamp(),
-                senderId: uid,
-              },
-            });
-          }
-        );
-      } else {
-        await addDoc(messageRef, messageData);
-
-        const chatRef = doc(db, "chats", chatId);
-        await updateDoc(chatRef, {
-          lastMessage: {
-            text: input,
-            createdAt: serverTimestamp(),
-            senderId: uid,
-          },
-        });
-      }
+      const chatRef = doc(db, "chats", chatId);
+      await updateDoc(chatRef, {
+        lastMessage: {
+          text: trimmedInput,
+          createdAt: serverTimestamp(),
+          senderId: uid,
+        },
+        [`unreadCount.${receiver?.id}`]: (chats.find(c => c.id === chatId)?.unreadCount?.[receiver?.id] || 0) + 1
+      });
     } catch (error) {
       console.error("Error sending message:", error);
+    } finally {
+      setSending(false);
+      inputRef.current?.focus();
     }
   };
 
   const onEmojiClick = (emojiObject) => {
     setInput((prevInput) => prevInput + emojiObject.emoji);
+    inputRef.current?.focus();
   };
 
-  const handleFileChange = (e) => {
-    if (e.target.files[0]) {
-      setFile(e.target.files[0]);
+  // Format date for timestamp header
+  const formatMessageDate = (timestamp) => {
+    if (!timestamp || !timestamp.toDate) return null;
+    
+    const date = timestamp.toDate();
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return "Today";
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return "Yesterday";
+    } else {
+      return date.toLocaleDateString(undefined, { 
+        weekday: 'long', 
+        month: 'short', 
+        day: 'numeric' 
+      });
     }
   };
 
+  // Group messages by date
+  const groupedMessages = messages.reduce((groups, message) => {
+    if (!message.createdAt) return groups;
+    
+    const dateStr = formatMessageDate(message.createdAt);
+    if (!groups[dateStr]) {
+      groups[dateStr] = [];
+    }
+    groups[dateStr].push(message);
+    return groups;
+  }, {});
+
   return (
-    <div className="flex flex-col h-full bg-white">
-      {/* Messages Container */}
-      <div className="flex-grow overflow-y-auto p-4 space-y-4">
-        {messages.map((msg, index) => (
-          <div
-            key={msg.id}
-            className={`flex items-start ${
-              msg.senderId === auth.currentUser.uid
-                ? "justify-end"
-                : "justify-start"
-            }`}
-          >
-            <div
-              className={`max-w-[70%] p-3 rounded-lg ${
-                msg.senderId === auth.currentUser.uid
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200 text-gray-800"
-              }`}
-            >
-              {msg.text && <p className="text-sm">{msg.text}</p>}
-              {msg.file && (
-                <div className="mt-2">
-                  {msg.file.type.startsWith("image/") ? (
-                    <img
-                      src={msg.file.url}
-                      alt={msg.file.name}
-                      className="max-w-full h-auto"
-                    />
-                  ) : (
-                    <a
-                      href={msg.file.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {msg.file.name}
-                    </a>
-                  )}
-                </div>
-              )}
-              <span className="text-xs opacity-70 block mt-1 text-right">
-                {msg.senderName}
-              </span>
-            </div>
-            {index === messages.length - 1 && (
-              <span ref={scrollToBottom}></span>
+    <div className="flex flex-col h-full bg-gray-50">
+      {/* Chat Header */}
+      <div className="flex items-center p-3 md:p-4 border-b border-gray-200 bg-white shadow-sm sticky top-0 z-10">
+        <button className="md:hidden mr-2 text-gray-500 hover:text-gray-700" onClick={() => window.history.back()}>
+          <ArrowLeft size={20} />
+        </button>
+        <div className="flex items-center space-x-3">
+          <div className="relative">
+            {receiver?.photoURL ? (
+              <img
+                src={receiver.photoURL}
+                alt={receiver.displayName}
+                className="w-10 h-10 rounded-full object-cover border border-gray-200"
+              />
+            ) : (
+              <div className="w-10 h-10 flex items-center justify-center bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full">
+                {receiver?.displayName
+                  ? receiver.displayName.charAt(0).toUpperCase()
+                  : "?"}
+              </div>
             )}
+            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
           </div>
-        ))}
+          <div>
+            <span className="text-base font-semibold text-gray-800">
+              {receiver?.displayName || "Loading..."}
+            </span>
+            <p className="text-xs text-gray-500">Online</p>
+          </div>
+        </div>
       </div>
 
+      {/* Messages Container */}
+      <div 
+        ref={messagesContainerRef}
+        className="flex-grow overflow-y-auto p-4 space-y-6 bg-gray-50"
+        style={{ scrollBehavior: 'smooth' }}
+      >
+        {Object.entries(groupedMessages).map(([date, dateMessages]) => (
+          <div key={date}>
+            <div className="flex justify-center mb-4">
+              <span className="px-3 py-1 bg-gray-200 rounded-full text-xs font-medium text-gray-600">
+                {date}
+              </span>
+            </div>
+            
+            <div className="space-y-1">
+              {dateMessages.map((msg) => (
+                <ChatMessage key={msg.id} message={msg} />
+              ))}
+            </div>
+          </div>
+        ))}
+        
+        {messages.length === 0 && (
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center p-6 bg-white rounded-lg shadow-sm">
+              <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center bg-blue-100 rounded-full">
+                <MessageCircle className="h-8 w-8 text-blue-500" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-800 mb-2">Start a conversation</h3>
+              <p className="text-gray-600 text-sm">Say hello to {receiver?.displayName || 'your friend'}!</p>
+            </div>
+          </div>
+        )}
+        
+        <div ref={messagesEndRef} />
+        
+        {/* Scroll to bottom button */}
+        {showScrollButton && (
+          <button
+            onClick={scrollToBottom}
+            className="fixed bottom-24 right-6 p-2 bg-white rounded-full shadow-lg border border-gray-200 text-blue-500 hover:bg-blue-50 transition-all"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14M5 12l7 7 7-7" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Emoji Picker (conditionally rendered) */}
       {showEmojiPicker && (
-        <div className="absolute bottom-20 right-4">
-          <EmojiPicker onEmojiClick={onEmojiClick} />
+        <div className="absolute bottom-20 right-4 z-10 shadow-xl rounded-lg overflow-hidden">
+          <div className="bg-white p-2 rounded-t-lg border-b border-gray-200 flex justify-between">
+            <span className="text-sm font-medium">Emoji</span>
+            <button onClick={() => setShowEmojiPicker(false)} className="text-gray-500">
+              <X size={16} />
+            </button>
+          </div>
+          <EmojiPicker 
+            onEmojiClick={onEmojiClick} 
+            width={300} 
+            height={350}
+          />
         </div>
       )}
 
+      {/* Message Input */}
       <form
         onSubmit={sendMessage}
-        className="bg-gray-100 p-4 border-t border-gray-200 flex items-center relative"
+        className="bg-white p-3 border-t border-gray-200 flex items-center shadow-sm sticky bottom-0 z-10"
       >
-        <input
-          type="file"
-          onChange={handleFileChange}
-          className="hidden"
-          ref={fileInputRef}
-          accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
-        />
         <button
           type="button"
-          onClick={() => fileInputRef.current.click()}
-          className="ml-2 p-2 text-gray-600 hover:text-blue-500 transition"
+          className="p-2 rounded-full text-gray-500 hover:text-blue-500 hover:bg-blue-50 transition mr-1"
         >
-          <Paperclip className="h-5 w-5" />
+          <PlusCircle className="h-5 w-5" />
         </button>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your message..."
-          className="flex-grow px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+        
+        <div className="flex-grow relative">
+          <input
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={`Message ${receiver?.displayName || '...'}...`}
+            className="w-full px-4 py-2.5 bg-gray-100 hover:bg-gray-50 focus:bg-white border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-gray-700"
+          />
+        </div>
+        
         <button
           type="button"
           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-          className="ml-2 p-2 text-gray-600 hover:text-blue-500 transition"
+          className="mx-1 p-2 rounded-full text-gray-500 hover:text-yellow-500 hover:bg-yellow-50 transition"
         >
           <Smile className="h-5 w-5" />
         </button>
+        
         <button
           type="submit"
-          disabled={!input && !file}
-          className="ml-2 bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600 disabled:bg-gray-300 transition flex items-center"
+          disabled={!input.trim() || sending}
+          className={`ml-1 p-2.5 rounded-full flex items-center justify-center transition ${
+            input.trim() && !sending
+              ? "bg-blue-500 text-white hover:bg-blue-600"
+              : "bg-gray-200 text-gray-400"
+          }`}
         >
-          <Send className="h-5 w-5" />
+          {sending ? (
+            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          ) : (
+            <Send className="h-5 w-5" />
+          )}
         </button>
       </form>
     </div>

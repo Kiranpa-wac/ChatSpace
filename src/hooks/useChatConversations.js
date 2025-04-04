@@ -1,6 +1,5 @@
-// src/hooks/useChatConversations.js
 import { useState, useEffect } from "react";
-import { collection, query, where, onSnapshot, getDoc, doc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, getDoc, doc, updateDoc } from "firebase/firestore";
 import { db, auth } from "../../firebase";
 
 const useChatConversations = (currentUser) => {
@@ -20,27 +19,21 @@ const useChatConversations = (currentUser) => {
       const chatsData = [];
       const names = {};
 
-      // For each chat document, determine the other user's ID and fetch their displayName
       for (const docSnapshot of snapshot.docs) {
         const chat = { id: docSnapshot.id, ...docSnapshot.data() };
+        chatsData.push(chat);
         const otherUserId = chat.participants.find((id) => id !== currentUser.uid);
-
-        if (!participantNames[otherUserId]) {
+        if (otherUserId && !participantNames[otherUserId]) {
           try {
             const userDocRef = doc(db, "users", otherUserId);
             const userDoc = await getDoc(userDocRef);
-            names[otherUserId] = userDoc.exists()
-              ? userDoc.data().displayName
-              : "Unknown User";
+            names[otherUserId] = userDoc.exists() ? userDoc.data().displayName : "Unknown User";
           } catch (error) {
             console.error("Error fetching user:", error);
             names[otherUserId] = "Unknown User";
           }
         }
-
-        chatsData.push(chat);
       }
-
       setParticipantNames((prev) => ({ ...prev, ...names }));
       setChats(chatsData);
       setLoading(false);
@@ -49,12 +42,25 @@ const useChatConversations = (currentUser) => {
     return () => unsubscribe();
   }, [currentUser?.uid]);
 
+  // Function to extract other user's display name
   const getParticipantName = (chat) => {
     const otherUserId = chat.participants.find((id) => id !== currentUser?.uid);
     return participantNames[otherUserId] || "Loading...";
   };
 
-  return { chats, getParticipantName, loading };
+  // Function to mark a chat as read by resetting the unread count for currentUser
+  const markChatAsRead = async (chatId) => {
+    try {
+      const chatRef = doc(db, "chats", chatId);
+      await updateDoc(chatRef, {
+        [`unreadCount.${currentUser.uid}`]: 0,
+      });
+    } catch (error) {
+      console.error("Error marking chat as read:", error);
+    }
+  };
+
+  return { chats,setChats, getParticipantName, loading, markChatAsRead };
 };
 
 export default useChatConversations;
