@@ -1,4 +1,3 @@
-// src/hooks/useNewChatModal.js
 import { useState, useEffect } from "react";
 import {
   collection,
@@ -13,15 +12,18 @@ import {
   documentId,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { useAtom } from "jotai";
+import { userAtom } from "../atom";
 
-const useNewChatModal = (currentUser) => {
+const useNewChatModal = ({ onChatCreated }) => {
+  const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedUserId, setSelectedUserId] = useState(null);
+  const [currentUser] = useAtom(userAtom);
 
-  // Debounced search: trigger search after 500ms of inactivity
   useEffect(() => {
     const handler = setTimeout(() => {
       const searchTerm = search.trim().toLowerCase();
@@ -31,9 +33,7 @@ const useNewChatModal = (currentUser) => {
         setResults([]);
       }
     }, 500);
-
     return () => clearTimeout(handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   const handleSearch = async (searchTerm) => {
@@ -48,7 +48,6 @@ const useNewChatModal = (currentUser) => {
         where("searchName", "<=", searchTerm + "\uf8ff"),
         where(documentId(), "!=", currentUser.uid)
       );
-
       const snapshot = await getDocs(q);
       const filtered = snapshot.docs.map((doc) => ({
         id: doc.id,
@@ -63,7 +62,7 @@ const useNewChatModal = (currentUser) => {
     }
   };
 
-  const handleSelectUser = async (selectedUser, input) => {
+  const handleSelectUser = async (selectedUser) => {
     try {
       setSelectedUserId(selectedUser.id);
       if (!currentUser) return;
@@ -74,7 +73,6 @@ const useNewChatModal = (currentUser) => {
         where("participants", "array-contains", currentUser.uid)
       );
       const snapshot = await getDocs(q);
-      // Check if a chat already exists with the selected user
       let existingChat = snapshot.docs.find((doc) =>
         doc.data().participants.includes(selectedUser.id)
       );
@@ -86,41 +84,49 @@ const useNewChatModal = (currentUser) => {
           participants: [currentUser.uid, selectedUser.id],
           createdAt: serverTimestamp(),
           lastMessage: {
-            text: "", 
+            text: "",
             createdAt: serverTimestamp(),
             senderId: currentUser.uid,
           },
+          unreadCount: {
+            [currentUser.uid]: 0,
+            [selectedUser.id]: 0,
+          },
+          readBy: [],
         };
         const chatRef = await addDoc(chatsRef, chatData);
         chatId = chatRef.id;
-        // Update current user's chatList
+
         const currentUserRef = doc(db, "users", currentUser.uid);
-        await updateDoc(currentUserRef, {
+        const withUserName = selectedUser.displayName || "Unknown User";
+        const updateData = {
           chatList: arrayUnion({
             chatId,
             withUserId: selectedUser.id,
-            withUserName: selectedUser.displayName,
+            withUserName,
           }),
-        });
+        };
+        await updateDoc(currentUserRef, updateData);
       }
-      return chatId;
+      onChatCreated(chatId);
+      setIsOpen(false);
     } catch (error) {
       console.error("Chat creation error:", error);
       setError("Failed to create chat. Please try again.");
-      return null;
     } finally {
       setSelectedUserId(null);
     }
   };
 
   return {
+    isOpen,
+    setIsOpen,
     search,
     setSearch,
     results,
     loading,
     error,
     selectedUserId,
-    handleSearch,
     handleSelectUser,
   };
 };
