@@ -18,8 +18,6 @@ import { Search, X, MessageSquarePlus, Loader2 } from "lucide-react";
 
 const NewChatModal = ({ onChatCreated }) => {
   const [isOpen, setIsOpen] = useState(false);
-
-  // Modal fields & state
   const [search, setSearch] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -27,7 +25,6 @@ const NewChatModal = ({ onChatCreated }) => {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [currentUser] = useAtom(userAtom);
 
-  // Debounced search: Trigger search 500ms after typing stops.
   useEffect(() => {
     const handler = setTimeout(() => {
       const searchTerm = search.trim().toLowerCase();
@@ -37,7 +34,6 @@ const NewChatModal = ({ onChatCreated }) => {
         setResults([]);
       }
     }, 500);
-
     return () => clearTimeout(handler);
   }, [search]);
 
@@ -53,7 +49,6 @@ const NewChatModal = ({ onChatCreated }) => {
         where("searchName", "<=", searchTerm + "\uf8ff"),
         where(documentId(), "!=", currentUser.uid)
       );
-
       const snapshot = await getDocs(q);
       const filtered = snapshot.docs.map((doc) => ({
         id: doc.id,
@@ -86,6 +81,7 @@ const NewChatModal = ({ onChatCreated }) => {
       if (existingChat) {
         chatId = existingChat.id;
       } else {
+        // const withUserName = selectedUser.displayName || "Unknown User";
         const chatData = {
           participants: [currentUser.uid, selectedUser.id],
           createdAt: serverTimestamp(),
@@ -94,25 +90,26 @@ const NewChatModal = ({ onChatCreated }) => {
             createdAt: serverTimestamp(),
             senderId: currentUser.uid,
           },
-          // Initialize unreadCount for each participant to 0
           unreadCount: {
             [currentUser.uid]: 0,
             [selectedUser.id]: 0,
           },
-          // Initialize readBy as an empty array (or add currentUser.uid if desired)
           readBy: [],
         };
+        console.log("Creating new chat with data:", chatData);
         const chatRef = await addDoc(chatsRef, chatData);
         chatId = chatRef.id;
-        // Update current user's chatList
+
         const currentUserRef = doc(db, "users", currentUser.uid);
-        await updateDoc(currentUserRef, {
+        const withUserName = selectedUser.displayName || "Unknown User"; // Fallback if displayName is undefined
+        const updateData = {
           chatList: arrayUnion({
             chatId,
             withUserId: selectedUser.id,
-            withUserName: selectedUser.displayName,
+            withUserName,
           }),
-        });
+        };
+        await updateDoc(currentUserRef, updateData);
       }
       onChatCreated(chatId);
       setIsOpen(false);
@@ -135,7 +132,6 @@ const NewChatModal = ({ onChatCreated }) => {
     );
   }
 
-  // When open, render the modal overlay.
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md transform transition-all">

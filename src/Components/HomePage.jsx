@@ -30,7 +30,6 @@ const HomePage = () => {
       <NavBar />
       
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Mobile sidebar toggle button */}
         <button 
           onClick={toggleSidebar}
           className="md:hidden fixed bottom-4 left-4 z-20 p-3 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-all"
@@ -59,7 +58,6 @@ const HomePage = () => {
           />
         </div>
         
-        {/* Main Chat Area */}
         <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? "md:ml-0" : "ml-0"}`}>
           {selectedChatId ? (
             <ChatRoom chatId={selectedChatId} chats={chats} setChats={setChats} />

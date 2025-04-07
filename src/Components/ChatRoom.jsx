@@ -5,10 +5,12 @@ import {
   collection,
   query,
   orderBy,
-  doc,
-  writeBatch,
+  addDoc,
   serverTimestamp,
   onSnapshot,
+  doc,
+  updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { Send, Smile, PlusCircle, ArrowLeft } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
@@ -17,6 +19,8 @@ import { MessageCircle } from "lucide-react";
 import PresenceIndicator from "./PresenceIndicator";
 import useChatConversations from "../hooks/useChatConversations";
 import useUserPresence from "../hooks/useUserPresence";
+import { updateTypingStatus } from "../typingStatus";
+import useTypingStatus from "../hooks/useTypingStatus";
 
 const ChatRoom = ({ chatId, chats, setChats }) => {
   const [messages, setMessages] = useState([]);
@@ -27,12 +31,24 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
 
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
-  const receiver = useOtherUserData(chatId);
   const inputRef = useRef(null);
-  const online = useUserPresence(receiver?.uid);
+
+  const receiver = useOtherUserData(chatId);
+  // Use the realtime presence hook for receiver if needed
+  const online = useUserPresence(receiver?.uid || receiver?.id);
+
+  // Use the typing status hook for the other user
+  const otherUserTyping = useTypingStatus(
+    chatId,
+    receiver?.uid || receiver?.id
+  );
+
   const { getParticipantName } = useChatConversations(auth.currentUser);
 
-  // Focus on input field when chat changes
+  // We'll use a ref to debounce typing status updates for the current user
+  const typingTimeoutRef = useRef(null);
+
+  // Focus input when chat changes
   useEffect(() => {
     setMessages([]);
     if (inputRef.current) {
@@ -56,12 +72,10 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
-
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container;
       setShowScrollButton(scrollHeight - scrollTop - clientHeight > 100);
     };
-
     container.addEventListener("scroll", handleScroll);
     return () => container.removeEventListener("scroll", handleScroll);
   }, []);
@@ -70,9 +84,26 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Handle input changes and update typing status
+  const handleInputChange = (e) => {
+    setInput(e.target.value);
+    // Immediately mark as typing
+    updateTypingStatus(chatId, auth.currentUser.uid, true);
+    // Clear any existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    // Set timeout to mark as not typing after 2 seconds of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      updateTypingStatus(chatId, auth.currentUser.uid, false);
+    }, 2000);
+  };
+
   const sendMessage = async (e) => {
     e.preventDefault();
     if (input.trim() === "" || sending) return;
+    // Reset typing status immediately on send
+    updateTypingStatus(chatId, auth.currentUser.uid, false);
 
     setShowEmojiPicker(false);
     setSending(true);
@@ -81,40 +112,10 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
 
     const { uid, photoURL, displayName } = auth.currentUser;
 
-    // Optimistically update the local chats array
-    setChats((prevChats) => {
-      const updatedChats = prevChats.map((chat) =>
-        chat.id === chatId
-          ? {
-              ...chat,
-              lastMessage: {
-                text: trimmedInput,
-                createdAt: new Date(), // Temporary local timestamp
-                senderId: uid,
-              },
-              unreadCount: {
-                ...chat.unreadCount,
-                [receiver?.id]: (chat.unreadCount?.[receiver?.id] || 0) + 1,
-              },
-            }
-          : chat
-      );
-      return [...updatedChats].sort((a, b) => {
-        const getTimeInMillis = (createdAt) =>
-          createdAt?.toMillis
-            ? createdAt.toMillis()
-            : createdAt?.getTime() || 0;
-        const timeA = getTimeInMillis(a.lastMessage?.createdAt);
-        const timeB = getTimeInMillis(b.lastMessage?.createdAt);
-        return timeB - timeA;
-      });
-    });
-
     try {
       const messageRef = collection(db, "chats", chatId, "messages");
       const chatRef = doc(db, "chats", chatId);
       const batch = writeBatch(db);
-
       const messageData = {
         senderId: uid,
         senderName: displayName,
@@ -134,14 +135,13 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
           createdAt: serverTimestamp(),
           senderId: uid,
         },
-        [`unreadCount.${receiver?.id}`]:
-          (chats.find((c) => c.id === chatId)?.unreadCount?.[receiver?.id] ||
-            0) + 1,
+        [`unreadCount.${receiver?.uid || receiver?.id}`]:
+          (chats.find((c) => c.id === chatId)?.unreadCount?.[
+            receiver?.uid || receiver?.id
+          ] || 0) + 1,
       });
 
-      // Commit the batch
       await batch.commit();
-
       console.log(
         "Message sent and chat updated atomically for chatId:",
         chatId
@@ -159,15 +159,13 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
     inputRef.current?.focus();
   };
 
-  // Format date for timestamp header
+  // Format date for grouping messages
   const formatMessageDate = (timestamp) => {
     if (!timestamp || !timestamp.toDate) return null;
-
     const date = timestamp.toDate();
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-
     if (date.toDateString() === today.toDateString()) {
       return "Today";
     } else if (date.toDateString() === yesterday.toDateString()) {
@@ -184,7 +182,6 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
   // Group messages by date
   const groupedMessages = messages.reduce((groups, message) => {
     if (!message.createdAt) return groups;
-
     const dateStr = formatMessageDate(message.createdAt);
     if (!groups[dateStr]) {
       groups[dateStr] = [];
@@ -192,7 +189,6 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
     groups[dateStr].push(message);
     return groups;
   }, {});
-  console.log("receiver", receiver);
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
@@ -225,11 +221,15 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
               {receiver?.displayName || "Loading..."}
             </span>
             <div className="flex items-center">
-              <PresenceIndicator uid={receiver?.uid} />
+              <PresenceIndicator uid={receiver?.uid || receiver?.id} />
               <span className="text-xs text-gray-500 ml-1">
                 {online ? "Online" : "Offline"}
               </span>
             </div>
+            {/* Display typing indicator if the other user is typing */}
+            {otherUserTyping && (
+              <span className="text-xs text-gray-500">Typing...</span>
+            )}
           </div>
         </div>
       </div>
@@ -247,7 +247,6 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
                 {date}
               </span>
             </div>
-
             <div className="space-y-1">
               {dateMessages.map((msg) => (
                 <ChatMessage key={msg.id} message={msg} />
@@ -255,7 +254,6 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
             </div>
           </div>
         ))}
-
         {messages.length === 0 && (
           <div className="h-full flex items-center justify-center">
             <div className="text-center p-6 bg-white rounded-lg shadow-sm">
@@ -271,7 +269,6 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
             </div>
           </div>
         )}
-
         <div ref={messagesEndRef} />
         {showScrollButton && (
           <button
@@ -323,7 +320,7 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
           <input
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
             placeholder={`Message ${receiver?.displayName || "..."}...`}
             className="w-full px-4 py-2.5 bg-gray-100 hover:bg-gray-50 focus:bg-white border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-gray-700"
           />
