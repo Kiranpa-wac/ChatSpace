@@ -60,7 +60,7 @@ const useChatConversations = (currentUser) => {
     }
   };
 
-  return { chats,setChats, getParticipantName, loading, markChatAsRead };
+  return { chats, setChats, getParticipantName, loading, markChatAsRead };
 };
 
 export default useChatConversations;

@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useAtom } from "jotai";
-import { userAtom } from "../atom";
 import { MoreVertical, MessageCircle, User, Settings, LogOut } from "lucide-react";
 import SignOut from "./SignOut";
+import { useAtom } from "jotai";
+import { userAtom } from "../atom";
+import useUserPresence from "../hooks/useUserPresence"; // Import the presence hook
 
 const NavBar = () => {
   const [user] = useAtom(userAtom);
   const [showPopup, setShowPopup] = useState(false);
   const popupRef = useRef(null);
+  const online = useUserPresence(user?.uid); // Get online status for current user
 
   const togglePopup = () => {
     setShowPopup(!showPopup);
@@ -23,7 +25,6 @@ const NavBar = () => {
     if (showPopup) {
       document.addEventListener("mousedown", handleClickOutside);
     }
-
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
@@ -41,9 +42,10 @@ const NavBar = () => {
       </div>
       
       <div className="flex items-center space-x-3">
-        <div className="hidden md:flex items-center text-sm text-gray-600 mr-2">
-          <span className="bg-green-500 w-2 h-2 rounded-full mr-2"></span>
-          Online
+        <div className="flex items-center text-sm text-gray-600 mr-2">
+          {/* Dynamically render online status */}
+          <span className={`w-2 h-2 rounded-full mr-2 ${online ? "bg-green-500" : "bg-gray-400"}`}></span>
+          <span>{online ? "Online" : "Offline"}</span>
         </div>
         
         <div className="relative" ref={popupRef}>
@@ -53,7 +55,7 @@ const NavBar = () => {
           >
             <div className="relative">
               <img
-                src={user.photoURL || "https://upload.wikimedia.org/wikipedia/commons/9/99/Sample_User_Icon.png"}
+                src={user.photoURL || "https://via.placeholder.com/40"}
                 alt="Profile"
                 className="w-9 h-9 rounded-full object-cover border-2 border-blue-500"
               />
@@ -69,9 +71,9 @@ const NavBar = () => {
               <div className="p-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white">
                 <div className="flex items-center space-x-3">
                   <img
-                    src={user.photoURL || "https://upload.wikimedia.org/wikipedia/commons/9/99/Sample_User_Icon.png"}
+                    src={user.photoURL || "https://via.placeholder.com/40"}
                     alt="Profile"
-                    className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-md"
+                    className="w-12 h-12 rounded-full object-cover mr-2"
                   />
                   <div>
                     <p className="font-semibold">{user.displayName}</p>

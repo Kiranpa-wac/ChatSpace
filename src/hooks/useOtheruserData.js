@@ -16,14 +16,14 @@ const useOtherUserData = (chatId) => {
           // Determine the other participant (not the current user)
           const currentUserId = auth.currentUser.uid;
           const otherUserId = chatData.participants.find(
-            (id) => id !== currentUserId 
+            (id) => id !== currentUserId
           );
           if (otherUserId) {
-            // Fetch the other user's document
+            // Fetch the other user's document and include uid in the returned data
             const otherUserRef = doc(db, "users", otherUserId);
             const otherUserSnap = await getDoc(otherUserRef);
             if (otherUserSnap.exists()) {
-              setOtherUserData(otherUserSnap.data());
+              setOtherUserData({ uid: otherUserId, ...otherUserSnap.data() });
             }
           }
         }

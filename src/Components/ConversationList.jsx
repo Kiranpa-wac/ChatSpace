@@ -126,9 +126,6 @@ const ConversationList = ({ onSelectChat, chats, setChats, getParticipantName, l
                       <span className="text-lg font-semibold">
                         {getParticipantName(chat)[0]?.toUpperCase() || "?"}
                       </span>
-                      <div className="absolute -bottom-1 -right-1 border-2 border-white rounded-full">
-                        <PresenceIndicator uid={getOtherUserId(chat)} />
-                      </div>
                     </div>
                   </div>
                   
