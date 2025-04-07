@@ -189,7 +189,7 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
     groups[dateStr].push(message);
     return groups;
   }, {});
-
+  console.log("receiver", receiver);
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Chat Header */}
@@ -221,10 +221,12 @@ const ChatRoom = ({ chatId, chats, setChats }) => {
               {receiver?.displayName || "Loading..."}
             </span>
             <div className="flex items-center">
-              <PresenceIndicator uid={receiver?.uid || receiver?.id} />
-              <span className="text-xs text-gray-500 ml-1">
-                {online ? "Online" : "Offline"}
-              </span>
+              <span
+                className={`w-2 h-2 rounded-full mr-2 ${
+                  online ? "bg-green-500" : "bg-gray-400"
+                }`}
+              ></span>
+              <span>{online ? "Online" : "Offline"}</span>
             </div>
             {/* Display typing indicator if the other user is typing */}
             {otherUserTyping && (

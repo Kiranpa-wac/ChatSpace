@@ -22,7 +22,7 @@ const useSignIn = () => {
       // Get reference to user document in Firestore
       const userDocRef = doc(db, "users", currentUser.uid);
       const docSnap = await getDoc(userDocRef);
-      setupPresence()
+      setupPresence(currentUser.uid)
       // If the document does not exist, create it
       if (!docSnap.exists()) {
         await setDoc(userDocRef, {

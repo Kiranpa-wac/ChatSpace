@@ -3,12 +3,16 @@ import { auth } from "../../firebase";
 import { LogOut } from "lucide-react";
 import { useAtom } from "jotai";
 import { userAtom } from "../atom";
-
+import { goOffline } from "../setupPresence";
 const SignOut = () => {
   const [user, setUser] = useAtom(userAtom);
 
   const handleSignOut = async () => {
     try {
+      // Set the user's status to offline before signing out
+      if (user?.uid) {
+        goOffline(user.uid);
+      }
       await auth.signOut();
       setUser(null);
     } catch (error) {

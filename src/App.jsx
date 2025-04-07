@@ -5,9 +5,11 @@ import HomePage from "./Components/HomePage";
 import ProtectedRoute from "./ProtectedRoute";
 import { userAtom } from "./atom";
 import { useAtom } from "jotai";
+import { setupPresence } from "./setupPresence";
 
 const App = () => {
   const [user] = useAtom(userAtom)
+  setupPresence(user?.uid)
   return (
     <Router>
       <Routes>
